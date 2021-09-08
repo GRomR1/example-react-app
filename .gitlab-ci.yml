@@ -1,0 +1,85 @@
+
+variables:
+  YARN_CACHE_FOLDER:    .yarn
+  HELM_CACHE_HOME:      .helm
+  # Add next into Settings->CI/CD Variables
+  CHART_VERSION:        0.0.1
+  CHART_NAME:           react-app
+  NAMESPACE:            prod
+  KUBECONFIG:           kube.config
+  K8S_SERVER:           https://k8s.example.com
+  GITLAB_URL:           https://gitlab.example.com
+  CHART_REPOSITORY:     https://chartmuseum.example.com
+  # Deriative variables
+  APP_IMAGE:            registry.example.com/${CI_PROJECT_NAME}:${CI_PIPELINE_ID}
+  APP_VERSION:          ${CI_PIPELINE_ID}
+  APP_NAME:             ${CI_PROJECT_NAME}
+
+stages:
+  - build_app
+  - build_k8s
+  - deploy
+
+build_app:react:yarn:
+  stage: build_app
+  image: node:16.3
+  variables:
+    REACT_APP_APP_NAME: ${CI_PROJECT_NAME}
+    REACT_APP_APP_VERSION: ${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}
+  script:
+    - yarn install --silent --production
+    - yarn run build
+  after_script:
+    - echo "GITLAB_JOB_ID=${CI_JOB_ID}" >> ci_build.env
+    - echo "GITLAB_JOB_TOKEN=${CI_JOB_TOKEN}" >> ci_build.env
+  # Enable this after configure gitlab-runner to use Minio S3 storage
+  # cache:
+  #   paths:
+  #     - .yarn
+  #     - node_modules/
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
+    paths:
+      - build/
+    reports:
+      dotenv: ci_build.env  # Use artifacts:reports:dotenv to expose the variables to other jobs
+    expire_in: 1 month
+  tags:
+    - kubernetes
+
+build_k8s:yaml:
+  stage: build_k8s
+  image: envsubst:1.2.0 # https://github.com/a8m/envsubst
+  tags:
+    - kubernetes
+  dependencies:
+    - build_app:react:yarn
+  script:
+    - echo $GITLAB_JOB_TOKEN $GITLAB_JOB_ID
+    - envsubst < helm-release.tpl > helm-release.yaml
+  artifacts:
+    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
+    paths:
+      - helm-release.yaml
+    expire_in: 1 month
+
+deploy:k8s:
+  stage: deploy
+  when: manual
+  image:
+    name: bitnami/kubectl:1.21 # https://hub.docker.com/r/bitnami/kubectl/
+    entrypoint: [""]
+  tags:
+    - kubernetes
+  dependencies:
+    - build_k8s:yaml
+  before_script:
+    - echo $CA | base64 -d > ca.crt
+    - kubectl config set-cluster k8s --server=${K8S_SERVER} --certificate-authority=ca.crt
+    - kubectl config set-credentials gitlab-runner --token=$K8S_TOKEN
+    - kubectl config set-context prod --cluster=k8s --namespace=$NAMESPACE --user=gitlab-runner
+    - kubectl config use-context prod
+  script:
+    - kubectl apply -f helm-release.yaml
+  after_script:
+    - rm -rf ca.crt kube.config helm-release.yaml

@@ -1,0 +1,12 @@
+{{- if .Values.configMap.create -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "react-app.fullname" . }}
+  labels:
+    {{- include "react-app.labels" . | nindent 4 }}
+data:
+  {{- with .Values.configMap.variables }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

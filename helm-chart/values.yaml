@@ -1,0 +1,62 @@
+# Default values for coviddemo.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: bitnami/nginx
+  pullPolicy: IfNotPresent
+  tag: ""
+
+configMap:
+  create: true
+  # when create configmap
+  variables:
+    # GITLAB_API_TOKEN: ""
+    GITLAB_PROJECT_ID: "" # $CI_PROJECT_ID
+    GITLAB_URL: ""
+    GITLAB_JOB_ID: "" # $CI_JOB_ID
+    GITLAB_PROJECT_NAME: "" # $CI_PROJECT_PATH
+    GITLAB_PIPELINE_ID: "" # CI_PIPELINE_ID
+    GITLAB_JOB_TOKEN: "" # $CI_JOB_TOKEN
+
+nginx:
+  configCreate: true
+
+service:
+  type: ClusterIP
+  port: 80
+  portName: http
+  protocol: TCP
+
+container:
+  portName: http
+  port: 8080
+  protocol: TCP
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 2
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 256Mi
+
+tolerations: []

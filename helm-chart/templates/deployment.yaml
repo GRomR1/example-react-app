@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "react-app.fullname" . }}
+  labels:
+    {{- include "react-app.labels" . | nindent 4 }}
+  annotations:
+    {{- include "react-app.annotations" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "react-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "react-app.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        # command: ["/bin/sh"]
+        # args: ["-c", "sleep infinity"]
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          successThreshold: {{ .Values.livenessProbe.successThreshold }}
+        {{- end }}
+        {{- if .Values.readinessProbe.enabled }}
+        readinessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          successThreshold: {{ .Values.readinessProbe.successThreshold }}
+        {{- end }}
+        ports:
+          - name: {{ .Values.container.portName | default "http" }}
+            containerPort: {{ .Values.container.port | default 8080 }}
+            protocol: {{ .Values.container.protocol | default "TCP" }}
+        volumeMounts:
+          - name: appdir
+            mountPath: "/app"
+          - name: nginx-config
+            mountPath: "/opt/bitnami/nginx/conf/bitnami"
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.configMap.create }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "react-app.fullname" . }}
+        {{- end }}
+      initContainers:
+        - name: download-artifacts
+          image: curlimages/curl:7.77.0
+          # command: ["/bin/sh"]
+          # args: ["-c", "sleep 300"]
+          command: ["/bin/sh"]
+          args: ["-c", "/script/download.sh"]
+          volumeMounts:
+          - name: appdir
+            mountPath: "/app"
+          - name: download-script
+            mountPath: /script/download.sh
+            subPath: download.sh
+          resources:
+            limits:
+              cpu: 10m
+              memory: 64Mi
+          {{- if .Values.configMap.create }}
+          envFrom:
+          - configMapRef:
+              name: {{ include "react-app.fullname" . }}
+          {{- end }}
+        - name: file-permissions
+          image: busybox:1.33
+          command: ['chown', '-R', '1001', '/app']
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+          - mountPath: /app
+            name: appdir
+      volumes:
+      - name: appdir
+        emptyDir: {}
+      - name: download-script
+        configMap:
+          name: {{ include "react-app.fullname" . }}-download-script
+          defaultMode: 0777
+      - name: nginx-config
+        configMap:
+          name: {{ include "react-app.fullname" . }}-nginx-config
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

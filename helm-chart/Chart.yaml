@@ -1,0 +1,13 @@
+apiVersion: v2
+type: application
+name: react-app
+description: NGINX based container with scripts for download builded artifacts from GitLab CI/CD 
+icon: https://bitnami.com/assets/stacks/nginx/img/nginx-stack-220x234.png
+sources:
+  - https://github.com/bitnami/bitnami-docker-nginx
+
+# Chart version
+version: 1.1.1
+# https://github.com/bitnami/bitnami-docker-nginx
+# Tag of Bitnami NGINX Docker image
+appVersion: "1.21"
